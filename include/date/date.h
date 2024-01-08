@@ -4202,11 +4202,32 @@ make_time(const std::chrono::duration<Rep, Period>& d)
     return hh_mm_ss<std::chrono::duration<Rep, Period>>(d);
 }
 
+// TENZIR PATCH:
+// In C++20, stdlibs define operator<< for sys_time and local_time
+// Thus, we'll only want to define them here, if they aren't already defined.
+
+template <class Type, class CharT, class Traits, class Enable = void>
+struct has_ostream_operator_for : std::false_type {};
+
+#if HAS_VOID_T
+
+template <class Type, class CharT, class Traits>
+struct has_ostream_operator_for<
+    Type,
+    CharT,
+    Traits,
+    std::void_t<decltype(std::declval<std::basic_ostream<CharT, Traits>&>()
+                         << std::declval<const Type&>())>>
+    : std::true_type {};
+
+#endif
+
 template <class CharT, class Traits, class Duration>
 inline
 typename std::enable_if
 <
-    !std::is_convertible<Duration, days>::value,
+    !std::is_convertible<Duration, days>::value &&
+    !has_ostream_operator_for<sys_time<Duration>, CharT, Traits>::value,
     std::basic_ostream<CharT, Traits>&
 >::type
 operator<<(std::basic_ostream<CharT, Traits>& os, const sys_time<Duration>& tp)
@@ -4217,7 +4238,11 @@ operator<<(std::basic_ostream<CharT, Traits>& os, const sys_time<Duration>& tp)
 
 template <class CharT, class Traits>
 inline
-std::basic_ostream<CharT, Traits>&
+typename std::enable_if
+<
+    !has_ostream_operator_for<sys_days, CharT, Traits>::value,
+    std::basic_ostream<CharT, Traits>&
+>::type
 operator<<(std::basic_ostream<CharT, Traits>& os, const sys_days& dp)
 {
     return os << year_month_day(dp);
@@ -4225,7 +4250,11 @@ operator<<(std::basic_ostream<CharT, Traits>& os, const sys_days& dp)
 
 template <class CharT, class Traits, class Duration>
 inline
-std::basic_ostream<CharT, Traits>&
+typename std::enable_if
+<
+    !has_ostream_operator_for<local_time<Duration>, CharT, Traits>::value,
+    std::basic_ostream<CharT, Traits>&
+>::type
 operator<<(std::basic_ostream<CharT, Traits>& os, const local_time<Duration>& ut)
 {
     return (os << sys_time<Duration>{ut.time_since_epoch()});
